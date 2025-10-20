@@ -1,0 +1,803 @@
+# Bakgrunn
+
+I denne oppgaven skal du undersøke ulikhet i inntektsfordelingen i Norge og internasjonalt ved å bruke flere datasett. Dere skal laste ned data fra [OECD](https://stats.oecd.org/index.aspx?r=994307#), [Our World in Data](https://ourworldindata.org/) og har tilgang til lokale inntektstall fra GitHub.
+
+Som en del av besvarelsen blir dere bedt om å lage "pene" figurer. Ekstern sensor på faget (Even S. Hvinden, Forsvarets forskningsinstitutt) presiserer at dette innebærer at dere følger STAV-prinsippet for gode figurer:
+
+\* **S**elvstendig: Figuren og tilhørende figurtekst inneholder all nødvendig informasjon for en entydig tolkning av innholdet. Enhetene, utvalget og transformasjoner fremkommer tydelig.
+
+\* **T**ydelig: Farger, linjestørrelse, og andre visuelle egenskaper kombinerer til å gjøre figuren lettleselige og bidrar til å fremheve egenskapen ved datasettet figuren illustrerer.
+
+\* **A**vgrenset: Figuren fremhever og illustrerer ett og kun ett poeng. Har dataene flere egenskaper vi vil vise så lager vi flere figurer.
+
+\* **V**akker: Figuren gir en utvungen og intuitiv følelse av tilfredsstillelse og mening.
+
+# Instruksjoner og oppgaver
+
+Mappeoppgaven kan besvares individuelt eller i grupper på inntil tre studentet. Grupper anbefales å undertegne en [samarbeidsavtale](https://github.com/uit-sok-1301-h25/uit-sok-1301-h25.github.io/blob/main/samarbeidsavtale_for_gruppearbeid_SOK-1301.docx). Det er tillatt å bruke kunstig intelligens til å skrive kode, og til å finpusse din tekst. Det er ikke tillatt å be KI-verktøyet om å skrive din besvarelse (jeg har sjekket hvilke type svar man får fra KI). Dersom du bruker et KI verktøy, [**må**]{.underline} du lage en KI-erklæring til din besvarelse som dokumenterer hvor i besvarelsen og hvordan du har brukt det. I forelesning 4 fikk dere noen tips om hvordan dere kan sitere KI.
+
+Bruk [Quarto](https://quarto.org/) i RStudio som plattform. Bruk følgende YAML-kode øverst i dokumentet (du kan tilpasse med evt. andre settinger).
+
+------------------------------------------------------------------------
+
+title: "SOK-1301, høst 2025, Mappeoppgave"
+
+author: Kandidatnr 314
+
+format: pdf
+
+echo: false
+
+output: true
+
+editor: visual
+
+------------------------------------------------------------------------
+
+I Wiseflow skal dere levere
+
+1.  en lenke til GitHub repoet hvor din Quarto(.qmd)-fil ligger, som viser din besvarelse inkludert kode, og
+
+2.  en pdf-fil som inneholder din besvarelse med tekst og figurer (ikke kode).
+
+Påse at koden kjører og at dere kan eksportere besvarelsen til pdf.
+
+**Husk å gi Mikko tilgang til ditt repo!** Brukernavn: mikkomoilanen
+
+# Oppgave 1. Inntektsulikhet i Norden og USA 2012-2023
+
+## Introduksjon
+
+I denne oppgaven skal vi bruke data fra OECD for å undersøke ulikhet i inntektsfordelingen i de nordiske landene og USA. Vi skal bruke fire ulike mål på ulikhet: (1) Gini-koeffisienten for markedsinntekt, (2) Gini-koeffisienten for bruttoinntekt, (3) Gini-koeffisienten for disponibel inntekt og (4) P90/P10.
+
+Vi skal laste ned data fra [OECD Income distribution database (IDD)](https://data-explorer.oecd.org/vis?lc=en&df%5Bds%5D=dsDisseminateFinalDMZ&df%5Bid%5D=DSD_WISE_IDD%40DF_IDD&df%5Bag%5D=OECD.WISE.INE&dq=.A.......&pd=%2C&to%5BTIME_PERIOD%5D=false) ved hjelp av deres [API-løsning](https://www.oecd.org/en/data/insights/data-explainers/2024/09/api.html). API-spørringen lager man i IDD-lenken gitt ovenfor ved å klikke på knappen "Developer API". Her ser du "Data query SDMX flavour". Ved å velge filtre på venstre siden av IDD siden endres denne spørringen. Velger jeg for eksempel Time period 2012-2023 og trykker på "Copy code" får jeg en URL som jeg kan bruke i min spørring. Dere kan redusere størrelsen på datasettet ved å filtrere bort noen valg som er av mer metodologisk art. Velg for eksempel "Methodology: Income definition since 2012" og "Definition: Current definition" for å ta bort mange obrservasjoner. Jeg skal i tillegg velge ut de målene som jeg er interessert i Measure: Gini (disposable income), Gini (market income), Gini (gross income) og P90/P10. Velg *Norway*, *Finland*, *Sweden*, *Danmark* og *United States* under *Countries*. Så trykker dere "Copy code". Lim inn denne url-koden i koden nedenfor og husk å skrive *&format=csvfilewithlabels* i slutten av url-adressen.
+
+```{r warning=FALSE, message=FALSE}
+
+rm(list=ls()) 
+
+# laste pakken for å lese data samt tidyverse
+
+library(tidyverse)
+
+# Koden i dette eksemplet er uten P90/P10-variabelen
+url = "https://sdmx.oecd.org/public/rest/data/OECD.WISE.INE,DSD_WISE_IDD@DF_IDD,/.A.......?dimensionAtObservation=AllDimensions&format=csvfilewithlabels"
+
+data<-read_csv(url)
+
+df <- as_tibble(data)
+```
+
+## Rydde opp i dataene
+
+Da har vi fått en tibble som vi kan bruke til analyse. Det er mulig at dere vil filtrere bort noen observasjoner og ta bort noen kolonner i tibblen som dere jobber med. Du kan også vurdere å gi bedre navn til dine variabler eller gjøre dem numeriske.
+
+```{r}
+df <- df %>% 
+ filter(REF_AREA %in% c("NOR", "SWE", "DNK", "FIN", "USA")) %>%
+  select("TIME_PERIOD","REF_AREA","Reference area", "MEASURE", "Measure", "UNIT_MEASURE", "Unit of measure", "AGE", "Age","OBS_VALUE", "Observation status", )
+```
+
+```{r}
+df_gini <- df %>% 
+  filter(MEASURE %in% c("INC_MRKT_GINI", "INC_DISP_GINI", "INC_GROSS_GINI")) %>% 
+  select(-c("UNIT_MEASURE", "Unit of measure"))
+```
+
+```{r}
+df_P90P10 <- df %>% 
+  filter(MEASURE %in% "D9_1_INC_DISP") %>% 
+  select(-c("MEASURE", "Measure", "UNIT_MEASURE", "Unit of measure"))
+```
+
+## Oppgave 1a
+
+Bruk datasettet til å lage to figurer. Den første skal ha tre paneler ved siden av hverandre. Jeg anbefaler å bruke funksjonen [facets](https://r4ds.had.co.nz/data-visualisation.html#facets), se eksempelet under. I hver figur skal du tegne et kurvediagram ved hjelp av `ggplot` og `geom_line()`, med årstall på den horisontale `x`-aksen, og verdien på Gini på den vertikale `y`-aksen. Tegn inn alle tre definisjoner av Gini som du har i datasettet. Du skal ha alle fem land med i alle tre plottene. I det første panelet i figuren velger du Gini-koeffisienten for markedsinntekt, i det andre panelet tar du Gini-koeffisienten for bruttoinntekt, og i det tredje Gini-koeffisienten for disponibel inntekt. Gi hele figuren og hvert panel passende titler, og husk benevning av aksene, samt legende til figuren (plasser den gjerne under figuren (med `theme(legend.position = "bottom")`).
+
+Den andre figuren skal vise utviklingen av P90/P10 for de samme landene som i den første figuren.
+
+```{r}
+df_gini <- df_gini %>%
+  mutate(
+    MEASURE = recode(
+      MEASURE,
+      "INC_MRKT_GINI"  = "Markedsinntekt",
+      "INC_GROSS_GINI" = "Bruttoinntekt",
+      "INC_DISP_GINI"  = "Disponibel inntekt"
+    ),
+
+ MEASURE = factor(MEASURE,
+                     levels = c("Markedsinntekt", "Bruttoinntekt", "Disponibel inntekt"))
+  ) %>%
+  filter(between(TIME_PERIOD, 2012, 2023))
+```
+
+```{r}
+ggplot(df_gini %>% filter(TIME_PERIOD >= 2012, TIME_PERIOD <= 2023),
+       aes(x = TIME_PERIOD, y = OBS_VALUE, color = `Reference area`, group = `Reference area`)) +
+  geom_line() +
+  facet_wrap(~ MEASURE, nrow = 1) +
+  labs(
+    title = "Gini-koeffisient for fem land etter inntektsbegrep (2012–2023)",
+    x = "År",
+    y = "Gini-koeffisient (0–1)",
+    color = "Land",
+    caption = "Kilde: OECD Income Distribution Database (IDD). Gini beregnet 0–1. Egen fremstilling."
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    legend.position = "bottom",
+    strip.text = element_text(face = "bold"),
+    plot.title = element_text(face = "bold"))
+```
+
+```{r}
+ggplot(
+  df_P90P10 %>% filter(between(TIME_PERIOD, 2012, 2023)),
+  aes(x = TIME_PERIOD, y = OBS_VALUE, color = `Reference area`, group = `Reference area`)
+) +
+  geom_line(linewidth = 1) +
+  scale_color_brewer(palette = "Dark2") +
+  labs(
+    title = "Utvikling i P90/P10-forhold (disponibel inntekt, 2012–2023)",
+    subtitle = "For Norge, Sverige, Danmark, Finland og USA",
+    x = "År",
+    y = "P90/P10-forhold (D9/D1)",
+    color = "Land",
+    caption = "Kilde: OECD IDD. P90/P10 måler forholdet mellom inntekt i 9. og 1. desil."
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    legend.position = "bottom",
+    plot.title = element_text(face = "bold", size = 14),
+    plot.subtitle = element_text(size = 11),
+    plot.caption = element_text(size = 9, hjust = 0)
+  )
+
+```
+
+## Gi en nøyaktig beskrivelse av figurene og definisjonene av indikatorene. Bruk figurene til å svare på følgende spørsmål:
+
+1.  **Hvordan forklarer man eventuelle forskjeller mellom de tre Gini-koeffisientene?**
+
+    Jeg har valgt å lage tre ulike figurer som viser de tre forskjellige Gini-koeffisientene. Informasjonen er hentet fra datasettet vårt.Den enkleste måten å forstå forskjellene mellom disse tre koeffisientene på, er å se på hva de faktisk måler.
+
+    **Markedsinntekt** viser den råe ulikheten som oppstår i markedet gjennom lønn, kapitalinntekter og andre inntektskilder. Her ser vi at ulikheten er størst, fordi det ikke er tatt hensyn til skatter eller overføringer.
+
+    **Bruttoinntekt** er resultatet etter offentlige overføringer, men før skatt. Dette inkluderer for eksempel trygd, barnetrygd og pensjoner. Disse ytelsene bidrar til å redusere ulikheten noe.
+
+    **Disponibel inntekt** er det husholdningen sitter igjen med etter både skatter og overføringer. Dette er den inntekten folk faktisk kan bruke, og her ser vi at ulikheten er lavest.
+
+    Forskjellen mellom disse tre målene illustrerer hvor mye omfordeling skattesystemet og velferdsstaten bidrar med.I de fire nordiske landene vi har valgt å analysere, ser vi at gapet mellom markedsinntekt og disponibel inntekt er stort. Dette viser at de nordiske landene har en høy grad av omfordeling.\
+    I USA, som er det femte landet vi har inkludert, er forskjellen mellom markedsinntekt og disponibel inntekt mindre. Dette tyder på svakere omfordeling, noe som i stor grad kan forklares av politiske forskjeller og et mindre omfattende velferdssystem.
+
+2.  **Hva viser Gini-målene om utviklingen av ulikhet i Norden og USA?**
+
+    **Norden (Norge, Sverige, Finland, Danmark):**\
+    Ulikheten er generelt lav og har vært stabil, med små endringer over tid.\
+    Sverige og Finland ligger som oftest litt høyere enn Norge og Danmark, men forskjellene er små.
+
+    **USA:**\
+    Har et klart høyere Gini nivå(rundt 0.38–0.4 for disponibel inntekt), og ulikheten har økt eller holdt seg høy.
+
+    Dette vil da si at ulikheten er stabil og lav i Norden, men høy og vedvarende i USA.
+
+3.  **Viser utviklingen av P90/P10 det samme som Gini-koeffisientene? Hvorfor/hvorfor ikke?**
+
+    **P90/P10** måler forholdet mellom inntekten til de 10 prosent med høyest inntekt og de 10 prosent med lavest inntekt.Dette målet forteller dermed hvor stor forskjell det er mellom toppen og bunnen av inntektsfordelingen.
+
+    I de nordiske landene viser P90/P10 samme hovedmønster som Gini-koeffisienten: lav ulikhet og små endringer over tid.\
+    I USA derimot er P90/P10 betydelige høyere og forskjellen har økt over tid, i tråd med utviklingen vi ser i Gini-tallene. Forskjellen mellom de to målene er at Gini-koeffisienten fanger hele inntekksfordelingen, mens P90/P10 fokuserer på forskjellene mellom de rikeste og de fattigste.\
+    Dermed viser begge målene den samme retningen på ulikhetsutviklingen, men P90/P10 kan i større grad fremheve endringer blant de med høyest og lavest inntekt, som Gini-tallet til en viss grad glatter ut.
+
+4.  **Hva kan forklare forskjeller i inntektsulikhet mellom de nordiske landene og USA?**
+
+    Hovedforskjellen ligger i økonomiske strukturer.
+
+    **Skattesystem og omfordeling:** \
+    Norden har høye skatter og omfattende overføringer (trygd, sosialstønad, barnetrygd, gratis utdanning). \
+    USA har lavere skatter og svakere velferdsordninger og omfordelinger. 
+
+    **Arbeidsmarked:** \
+    I Norden er arbeidsmarkedet preget av sterke fagforeninger og koordinert lønnsdannelse,dette skjer på nasjonalt nivå og tar hensyn til rettferdig lønnsutvikling for forskjellige yrker.USA har en markedsstyrt arbeidsmarked. 
+
+    **Utdanning og sosial mobilitet:** \
+    Gratis høyere utdanning i Norden reduserer ulikhet på sikt og gir like muligheter uavhengig av sosial bakgrunn.I USA er utdanning dyrere og mer avhengig av inntekt, dette vil da si at det påvirkes av familiens økonomi noe som fører til begrensende mobilitet og ulikhet. 
+
+5.  **Hvilken rolle spiller samfunnets institusjoner, for eksempel skattesystemet, for utjevning av ulikhet?**
+
+    Institusjoner i samfunnet er et sentralt begrepet for å forstå forskjellene i ulikhet.
+
+    Skattesystemet i Norden omfordeler inntekt effektivt,som innebærer å ha en mer rettferdig fordeling av inntektene. De som har høy inntektskilde betaler en større andel i skatt, og disse pengene brukes til velferdsordninger som trygd, helse og utdanning. Dette fører til at forskjellen mellom befolkningen blir mindre og skaper et mer likt utgangspunkt for alle. USA har mindre omfattende sosiale ordninger og skattesystem noe som fører til høy ulikhet som oppstår i arbeidsmarkedet, som igjen fører til større forskjeller mellom befolkningen.
+
+6.  **Diskuter i hvilken grad ulikhetspolitikken har “flatet ut” forskjellene over tid.**
+
+    I norden har ulikheten i stor grad stabilisert seg, men har ikke nødvendigvis blitt mindre. Omfordelingssystemet fungerer godt, men innteksforskjellene har økt svakt i flere land, blant annet fordi kapitalinntekter vokser raskere enn lønnsinntekter. I USA har ulikheten ikke flatet ut, den forblir høy.
+
+## Oppgave1b
+
+Du skal lage en ny variabel som er differansen mellom markedsinntekts-Gini og disponibelinntekts-Gini. Deretter lag en figur som viser utviklingen av denne indikatoren for landene i datasettet. Hvordan kan denne nye variabelen tolkes som en indikator på omfordelingspolitikk?¥
+
+```{r}
+df_gini_clean <- df %>%
+  filter(MEASURE %in% c("INC_MRKT_GINI", "INC_DISP_GINI", "INC_GROSS_GINI")) %>%
+  select(REF_AREA, `Reference area`, TIME_PERIOD, MEASURE, OBS_VALUE) %>%
+  mutate(TIME_PERIOD = as.integer(TIME_PERIOD))
+```
+
+```{r}
+df_gini_nodup <- df_gini_clean %>%
+  group_by(REF_AREA, `Reference area`, TIME_PERIOD, MEASURE) %>%
+  summarise(OBS_VALUE = mean(OBS_VALUE, na.rm = TRUE), .groups = "drop")
+```
+
+```{r}
+df_wide <- df_gini_nodup %>%
+  pivot_wider(names_from = MEASURE, values_from = OBS_VALUE) %>% 
+   mutate(Gini_diff = INC_MRKT_GINI - INC_DISP_GINI)
+```
+
+```{r}
+df_wide %>% 
+  filter(TIME_PERIOD >= 2012, TIME_PERIOD <= 2023) %>%
+  ggplot(aes(x = TIME_PERIOD, y = Gini_diff, color = `Reference area`)) +
+  geom_line() +
+  geom_point() +
+  labs(
+    x = "År",
+    y = "Forskjell i Gini (Marked − Disponibel)",
+    title = "Endring i ulikhet etter skatt/overføringer (2012–2023)"
+  ) +
+  theme_minimal()
+```
+
+Figuren viser hvor mye skatte- og overføringssystemet reduserer inntektsulikheten i ulike land mellom 2012 og 2023.
+
+De nordiske landene har en høy og stabil forskjell mellom markeds- og disponibel Gini, som viser at velferdsstaten omfordeler effektivt.
+
+USA har en betydelig lavere forskjell, noe som tyder på et mindre omfordelende skatte- og støttesystem.
+
+Utviklingen over tid er forholdsvis stabil i alle land, men små variasjoner kan skyldes endringer i politikk eller økonomiske svingninger.Forskjellene kan forklares av ulik velferdspolitikk, skattenivå og arbeidsmarkedsmodeller mellom de nordiske landene og USA.
+
+# Oppgave 2 - Er det en kobling mellom inntektsulikhet og tillit og inntektsulikhet og kriminalitet?
+
+Vi skal se på to mulige koblinger:
+
+1.  Stoler folk som bor i land med lav inntektsulikhet mer på hverandre enn de som bor i land med høy inntektsulikhet?
+
+2.  Har land med lav inntektsulikhet mindre kriminalitet enn land med store inntektsforskjeller?
+
+For å svare på disse spørsmålene skal vi bruke data fra **Our World in Data**. Vi laster ned dataene direkte fra deres dataside for [Gini-koeffisienten](https://ourworldindata.org/grapher/economic-inequality-gini-index),[tillit](https://ourworldindata.org/grapher/self-reported-trust-attitudes) og [kriminalitet](https://ourworldindata.org/grapher/homicide-rate-unodc).
+
+```{r warning=FALSE, message=FALSE}
+gini_url  <- "https://ourworldindata.org/grapher/economic-inequality-gini-index.csv"
+trust_url <- "https://ourworldindata.org/grapher/self-reported-trust-attitudes.csv"
+homi_url  <- "https://ourworldindata.org/grapher/homicide-rate-unodc.csv"
+
+gini  <- read_csv(gini_url)
+trust <- read_csv(trust_url)
+homi  <- read_csv(homi_url)
+```
+
+Noen av variabelnavnene i datasettene er veldig lange, så vi skal rydde litt. Jeg viser dette med det første datasettet:
+
+```{r warning=FALSE, message=FALSE}
+
+# Gini
+gini_clean <- gini %>%
+  rename(
+    country = Entity,
+    code    = Code,
+    year    = Year,
+    gini    = `Gini coefficient (2021 prices) - Income or consumption consolidated`
+  ) %>%
+  select(country, code, year, gini)
+
+```
+
+```{r}
+# Homi
+homi_clean <- homi %>%
+  rename(
+    homicide_rate = `Homicide rate per 100,000 population - sex: Total - age: Total`,
+    country = Entity,
+    code    = Code,
+    year    = Year,
+  ) %>%
+  select(country, code, year, homicide_rate)
+
+```
+
+Vi bruker de ryddede og sammenslåtte dataene til å undersøke sammenhenger mellom Gini-koeffisienten, tillit og drapsrate. #Figurene under viser hvordan variablene henger sammen.
+
+```{r}
+#Trust
+trust_clean <- trust %>%
+  rename(
+    trust = `Agree "Most people can be trusted"`,
+    country = Entity,
+    code    = Code,
+    year    = Year,
+  ) %>%
+  select(country, code, year, trust)
+```
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+```
+
+```{r}
+df_plot <- gini_clean %>%
+  inner_join(trust_clean, by = c("country", "code", "year")) %>%
+  filter(!is.na(gini), !is.na(trust))
+```
+
+```{r}
+# Sammenheng mellom Gini og tillit
+ggplot(df_plot, aes(x = gini, y = trust)) +
+  geom_point(color = "blue", alpha = 0.7) +
+  geom_smooth(method = "lm", se = FALSE, color = "red", size = 1) +
+  labs(
+    title = "Sammenheng mellom inntektsulikhet og tillit",
+    x = "Gini-koeffisient  (0–1)",
+    y = "Andel som stoler på andre (%)",
+    caption = "Kilder: Our World in Data (Gini, tillit)."
+  ) +
+  theme_minimal()
+
+#Tillit er målt som prosentandel av befolkningen som svarer at «de fleste mennesker kan stoles på». Figuren viser derfor tillit i prosent (%).
+```
+
+1.  **Stoler folk som bor i land med lav inntektsulikhet mer på hverandre enn de som bor i land med høy inntektsulikhet?**
+
+    Ja, det ser slik ut. I plottet ser vi en negativ sammenheng mellom Gini-koeffisienten (ulikhet) og tillit. Land med lav inntektsulikhet har høyere nivåer av sosial tillit, mens land med store forskjeller i inntekt viser lavere tillit til andre mennesker.Dette samsvarer med tidligere forskning som viser at økonomisk ulikhet ofte svekker den sosiale tilliten i et samfunn.
+
+```{r}
+library(dplyr)
+library(ggplot2)
+```
+
+```{r}
+# Slå sammen Gini og drapsrate på felles nøkler
+df_gini_homi <- gini_clean %>%
+  inner_join(homi_clean, by = c("country", "code", "year")) %>%
+  filter(!is.na(gini), !is.na(homicide_rate))
+```
+
+```{r}
+# Sammenheng mellom Gini og drapsrate
+ggplot(df_gini_homi, aes(x = gini, y = homicide_rate)) +
+  geom_point(color = "darkgreen", alpha = 0.7) +      # Grønne punkter
+  geom_smooth(method = "lm", se = FALSE, color = "orange", size = 1) +  # Oransje linje
+  labs(
+    title = "Sammenheng mellom inntektsulikhet og kriminalitet",
+    x = "Gini-koeffisient (0–1)",
+    y = "Drap per 100 000 innbyggere",
+    caption = "Kilde: Our World in Data (UNODC/WHO)."
+  ) +
+  theme_minimal()
+
+
+
+```
+
+## 
+
+2.**Har land med lav inntektsulikhet mindre kriminalitet enn land med store inntektsforskjeller?**
+
+Ja, det ser slik ut. Plottet viser en positiv sammenheng mellom Gini-koeffisienten og drapsraten. Land med høyere inntektsulikhet har generelt flere drap per 100 000 innbyggere. Dette antyder at store økonomiske forskjeller kan bidra til økt sosial spenning og høyere voldsnivå.
+
+**Konklusjon:**
+
+Vi ser at land med lav inntektsulikhet (lav Gini-verdi) generelt har høyere grad av tillit i befolkningen.\
+Tilsvarende ser vi at land med høy innteksulikhet ofte har høyere drapsrater.Dette tyder på at det finnes en negativ sammenheng mellom ulikhet og tillit, og en positiv sammenheng mellom ulikhet og kriminalitet.
+
+## Oppgave 2a
+
+1.  For å kunne analysere sammenhengene mellom inntektsulikhet og tillit og inntektsulikhet og kriminalitet må vi koble sammen datasettene. Rydd data fra de andre to tibblene (bruk koden ovenfor som eksempel). Koble deretter sammen datasettene ved å bruke `inner_join()`, for eksempel:hvor `trust_clean` og `homi_clean` er de to andre datasett som du har ryddet.
+
+    ```{r}
+    library(dplyr)
+    library(ggplot2)
+
+    ```
+
+    ```{r eval=FALSE}
+    df <- gini_clean %>%
+      inner_join(trust_clean, by = c("country","code","year")) %>%
+      inner_join(homi_clean,  by = c("country","code","year"))
+    ```
+
+    ```{r}
+    ggplot(df_plot, aes(x = gini, y = trust)) +
+      geom_point(alpha = 0.7) +
+      geom_smooth(method = "lm", se = FALSE, color = "blue", linewidth = 1) +
+      labs(
+        title = "Sammenheng mellom inntektsulikhet og tillit",
+        x = "Gini-koeffisient (inntektsulikhet)",
+        y = "Tillit (%)"
+      ) +
+      theme_minimal()
+    ```
+
+```{r}
+gini_homi <- inner_join(gini_clean, homi_clean,
+                        by = c("country", "code", "year"))
+```
+
+```{r}
+ggplot(gini_homi, aes(x = gini, y = homicide_rate)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", se = TRUE, color = "blue") +
+  labs(
+    title = "Sammenheng mellom inntektsulikhet og drapsrate",
+    x = "Gini-koeffisient (inntektsulikhet)",
+    y = "Drapsrate per 100 000 innbyggere"
+  ) +
+  theme_minimal()
+
+
+```
+
+```         
+```
+
+2.  **Forklar nøye hva tallene i datasettet representerer, og hvordan de er målt.**
+
+    Tallene i datasettet raprenserer tre sentrale samfunssindikatorer som brukes for å undersøke sammenhengen mellom innteksulikhet, tillit og kriminalitet på tvers av land og over tid.
+
+    **Gini-koeffisienten(gini)**, er en variabel som måler innteksulikheten i et land. Det varier vanligvis mellom 0 og 1, der :
+
+    0 betyr full likhet (alle har samme inntekt)
+
+    1 betyr full ulikhet (en person har all inntekt)
+
+    Tallene som er hentet fra Our World in Data, innebygger på data fra Verdensbanken og OECD. Verdiene beregnes ut fra husholdningsinntekter justert for priser (2021 priser)
+
+    **Tillit (trust)**
+
+    Denne variabelen viser andel av befolkningen som svarer at "de fleste mennesker kan stoles på". Dataene er samlet innn gjennom spørreundersøkelser der respondenter svarer på spørsmål om generell samfunnstillit. Tallene oppgis som prosentandel (0-100) av befolkningen som uttrykker tillit til andre menensker.
+
+    **Drapsrate (homicide)**
+
+    Denne variabelen måler antall drap pr 100 000 innbygere i et land per år. Tallene er hentet fra Our World in Data, som bruker statistikk fra FN (UNODC) og Verdens helseorganisasjon (WHO). Dette er et standard mål på voldelig kriminalitet og brukes som indikator på samfunnets trygghetsnivå.
+
+    Hver observasjon viser et bestemt land og år, med tilhørende tall for innteksulikhet (Gini), tillit (trust) og kriminalitet (Homicide_rate). Dataene brukes for å analysere om land med lavere innteksulikhet også har høyere tillit og lavere kriminalitet.
+
+    For å kunne analysere sammenhengene mellom inntektsulikhet, tillit og kriminalitet, må dataene kobles sammen slik at hvert land og år samsvarer i alle tre datasett.Dette gjøres ved hjelp av `inner_join()` fra `dplyr`-pakken, som sørger for at kun observasjoner som finnes i alle datasettene blir med i det endelige datasettet.Dermed unngår man manglende verdier og sikrer at analysen baseres på et komplett og sammenlignbar datagrunnlag.
+
+    I figuren mellom Gini og tillit ser man en tydelig negativ sammenheng, land med høyere inntektsulikhet har lavere samfunnstillit.\
+
+    I figuren mellom Gini og drapsrate vises derimot en positiv sammenheng, noe som tyder på at land med høyere ulikhet også har høyere kriminalitet.
+
+## Oppgave 2b
+
+Vi velger å bruke den siste observasjonen for hvert land fordi ikke alle land har data for de samme årene. Dersom vi tok med alle år, ville noen land få flere punkter i scatterplottet enn andre, og sammenligningen ville bli skjev.
+
+```{r}
+library(dplyr)
+library(tidyverse)
+library(ggrepel)
+```
+
+Lag to pene figurer. I den ene plotter du Gini-koeffisient mot tillit, og i den andre Gini-koeffisient mot kriminalitet. Merk gjerne punktene i figuren med landnavn. Her kan R-pakken [ggrepel](https://cran.r-project.org/web/packages/ggrepel/vignettes/ggrepel.html) være nyttig. Du kan også bruke pakken [ggflags](https://github.com/jimjam-slam/ggflags) via `remotes::install_github("rensa/ggflags")` om du foretrekker det. Bruk `geom_smooth(method = lm, se = FALSE)` for å se om det er en sammenheng i mellom variablene.
+
+```{r}
+gini_tbl  <- gini_clean  %>% select(country, code, year, gini)
+trust_tbl <- trust_clean %>% select(country, code, year, trust)
+homi_tbl  <- homi_clean  %>% select(country, code, year, homicide_rate)
+```
+
+```{r}
+df <- gini_clean %>%
+  inner_join(homi_clean,  by = c("country","code","year")) %>%
+  left_join(trust_clean, by = c("country","code","year"))  
+
+```
+
+```{r}
+stopifnot("country" %in% names(df),
+          "year"    %in% names(df))
+```
+
+```{r}
+df_latest <- df %>%
+  group_by(country) %>%
+  filter(year == max(year, na.rm = TRUE)) %>%
+  ungroup() 
+```
+
+```{r}
+df <- gini_clean %>%
+  inner_join(trust_clean, by = c("country", "code", "year")) %>%
+  inner_join(homi_clean,  by = c("country", "code", "year"))
+```
+
+```{r}
+names(df_latest)
+
+```
+
+```{r}
+ggplot(df_latest, aes(x = gini, y = trust, label = country)) +
+  geom_point(size = 2, colour = "red") +
+  geom_text_repel(size = 3) +
+  geom_smooth(method = "lm", se = FALSE, colour = "blue", linewidth = 0.8) +
+  labs(
+    title = "Sammenheng mellom inntektsulikhet og tillit",
+    subtitle = "Siste tilgjengelige observasjon per land",
+    x = "Gini-koeffisient (0–1)",
+    y = "Andel som stoler på andre (%)"
+  ) +
+  theme_minimal()
+
+
+```
+
+```{r}
+ggplot(df_latest, aes(x = gini, y = homicide_rate, label = country)) +
+  geom_point(size = 2, colour = "blue") +
+  geom_smooth(method = "lm", se = FALSE, colour = "red", linewidth = 0.8) +
+  labs(
+    title = "Sammenheng mellom inntektsulikhet og drap",
+    subtitle = "Siste tilgjengelige observasjon per land",
+    x = "Gini-koeffisient (0–1)",
+    y = "Drap per 100 000 innbyggere"
+  ) +
+  theme_minimal()
+
+```
+
+## Oppgave 2c
+
+1.  **Forklar figurene fra 2b nøye. Hva kan vi si (og ikke si) om sammenhengen mellom Gini og tillit og mellom Gini og kriminalitet. Hvordan kan dine funn forklares?**
+
+2.  **Hvilke faktorer på samfunnsnivå tror du kan påvirke tillit og kriminalitet uavhengig av inntektsulikhet, og hvordan kunne disse faktorene påvirke egenskapene til spredningsplottene?**
+
+Finn gjerne faglitteratur for å underbygge dine påstander. Husk å referere til kildene du bruker!
+
+**Figur 1** viser en tydelig negativ sammenheng mellom Gini-koeffisienten og sosial tillit: land med lav ulikhet, som Norge, Danmark og Finland, har høy andel som oppgir at de stoler på andre, mens land med høy ulikhet eksempelvis Sør-Afrika og Colombia viser lav tillit. Dette samsvarer med teorier om at økonomisk ulikhet svekker sosial kapital og reduserer mellommenneskelig tillit. Når forskjellene øker, forsterkes opplevelsen av sosial avstand og mistillit mellom grupper. Funnene støttes av Rothstein og Uslaner (2005), som viser at rettferdige institusjoner og lav ulikhet fremmer tillit, og av Kawachi et al. (1997), som kobler ulikhet til redusert sosial kapital og dårligere helseutfall. 
+
+**Figur 2** viser en positiv sammenheng mellom ulikhet og drapsrate. Land med høy ulikhet har langt høyere voldsnivå enn land med jevnere inntektsfordeling. Dette er i tråd med Fajnzylber, Lederman og Loayza (2002), som finner en robust kobling mellom ulikhet og vold selv etter kontroll for økonomiske faktorer. En mulig mekanisme er relativ deprivasjon: store økonomiske forskjeller kan skape frustrasjon og svekke sosiale normer, noe som øker risikoen for voldelig atferd. 
+
+Likevel viser begge figurene korrelasjoner, ikke kausalitet. Både tillit og kriminalitet påvirkes av andre samfunnsfaktorer, som institusjonskvalitet, korrupsjon, urbanisering, utdanning og velferdsstatens omfang (IMF, 2016). Slike forhold kan dempe eller forsterke sammenhengene i plottet. 
+
+Samlet tyder analysen på at lav ulikhet, sterke institusjoner og sosial inkludering bidrar til høy tillit og lav kriminalitet – men figurene alene kan ikke fastslå årsakssammenhenger. 
+
+# Oppgave 3 - Inntektsulikhet i Troms fylke
+
+I filen fra Forelesning 6 har vi data for 2015 om alder, kjønn, bostedskommune, fødeselsår, samt økonomisk data om inntekt, skatt og formue.
+
+```{r}
+
+url <- "https://raw.githubusercontent.com/uit-sok-1301-h25/uit-sok-1301-h25.github.io/main/data/skatt_troms_2015.RDS"
+
+skatt_troms_2015 <- url %>%
+  url() %>%
+  gzcon() %>% 
+  readRDS()
+```
+
+## Oppgave 3a
+
+Lag en ny variabel som viser inntekt etter skatt, og fjern negative verdier (forklar gjerne hvorfor).
+
+```{r}
+skatt_troms_2015 <- skatt_troms_2015 %>%
+  mutate(inntekt_etter_skatt = inntekt - skatt) %>%   # lager ny variabel
+  filter(inntekt_etter_skatt >= 0)                    # fjerner negative verdier
+```
+
+```{r}
+sum(skatt_troms_2015$inntekt_etter_skatt < 0) #Sjekke om det finnes noen negative verdier 
+```
+
+I datasettet fra URL-en ser vi sju kolonner som viser kommunenummer, aldersgruppe, fødselsår, kjønn, formue, inntekt og skatt. Når vi bruker `mutate()` til å trekke skatten fra inntekten, får vi en ny variabel for inntekt etter skatt. Dermed får datasettet åtte kolonner i stedet for sju.
+
+Jeg valgte å dobbeltsjekke om det fantes negative verdier, og resultatet viste at det ikke var noen. Grunnen til at man eventuelt fjerner negative verdier, er for å holde datasettet ryddig og meningsfullt. En negativ inntekt etter skatt gir ingen mening, siden man ikke kan sitte igjen med mindre enn null kroner. Det er derfor god praksis å kontrollere dette for å sikre kvaliteten på dataene.
+
+## Oppgave 3b
+
+Beregn gjennomsnittet for de økonomiske variablene (inntekt, inntekt etter skatt, skatt og formue). Undersøk hvordan gjennomsnittene og medianverdiene er i forhold til bostedskommune. Forklaring av kommunenummer [kan du finne her](https://no.wikipedia.org/wiki/Norske_kommunenummer). Husk at datasettet kommer fra 2015. Tegn pene figurer som hjelper oss å visualisere dataene, og forklar hva de viser.
+
+```{r}
+library(dplyr)
+```
+
+```{r}
+kommune_stats <- skatt_troms_2015 %>%
+  group_by(kommnr) %>%
+  summarise(
+    gj_inntekt = mean(inntekt, na.rm = TRUE),
+    med_inntekt = median(inntekt, na.rm = TRUE),
+    gj_inntekt_etter_skatt = mean(inntekt_etter_skatt, na.rm = TRUE),
+    med_inntekt_etter_skatt = median(inntekt_etter_skatt, na.rm = TRUE),
+    gj_skatt = mean(skatt, na.rm = TRUE),
+    med_skatt = median(skatt, na.rm = TRUE),
+    gj_formue = mean(formue, na.rm = TRUE),
+    med_formue = median(formue, na.rm = TRUE)
+  )
+```
+
+```{r}
+ggplot(kommune_stats, aes(x = factor (kommnr))) +
+  geom_col(aes(y = gj_formue), fill = "blue") +
+  geom_point(aes(y = med_formue), color = "red", size = 2) +
+  scale_y_continuous(labels = scales::label_number(big.mark = " ", decimal.mark = ",")) +
+  labs(
+    title = "Formue per kommune (2015)",
+    subtitle = "Blå søyler = gjennomsnitt, rød prikk = median",
+    x = "Kommune (nummer)",
+    y = "Kroner"
+  ) +
+  theme_minimal()
+```
+
+Formue per kommune (2015)
+
+Figuren viser gjennomsnitt (blå søyler) og median (rød prikk) for formue per kommune. Vi ser at gjennomsnittet i alle kommuner ligger betydelig høyere enn medianen. Dette betyr at formuefordelingen er sterkt skjev, med noen få personer som eier svært mye og drar opp gjennomsnittet. De fleste innbyggerne har dermed langt lavere formuer enn snittet. Kommuner med høyest søyler har en liten gruppe svært formuende husholdninger.
+
+```{r}
+ggplot(kommune_stats, aes(x = factor(kommnr))) +
+  geom_col(aes(y = gj_inntekt_etter_skatt), fill = "steelblue") +
+  geom_point(aes(y = med_inntekt_etter_skatt), color = "red", size = 2) +
+  scale_y_continuous(labels = scales::label_number(big.mark = " ", decimal.mark = ",")) +
+  labs(
+    title = "Inntekt etter skatt per kommune (2015)",
+    subtitle = "Blå søyler = gjennomsnitt, rød prikk = median",
+    x = "Kommune (nummer)",
+    y = "Kroner"
+  ) +
+  theme_minimal()
+```
+
+Gjennomsnitt og median inntekt per formue (2015)
+
+Her ser vi på bruttoinntekt før skatt. Gjennomsnittet ligger systematisk over medianen, noe som viser at enkelte personer tjener langt mer enn flertallet, og trekker opp gjennomsnittet. Sammenlignet med inntekt etter skatt er forskjellen mellom snitt og median noe større, noe som viser at skatten har en viss omfordelende effekt. Kommuner med høyere gjennomsnittlig inntekt er gjerne de som har større variasjon i inntektsnivå.
+
+```{r}
+ggplot(kommune_stats, aes(x = factor(kommnr))) +
+  geom_col(aes(y = gj_inntekt_etter_skatt), fill = "light pink") +
+  geom_point(aes(y = med_inntekt_etter_skatt), color = "dark red", size = 2) +
+  labs(
+    title = "Gjennomsnitt og median inntekt etter skatt per kommune (2015)",
+    x = "Kommune (nummer)",
+    y = "Kroner",
+    caption = "Rosa søyler = gjennomsnitt, rød prikk = median"
+  ) +
+  theme_minimal()
+```
+
+Gjennomsnitt og median inntekt etter skatt per kommune (2015)
+
+Denne figuren viser inntekt etter skatt, altså det husholdningene faktisk sitter igjen med. Forskjellen mellom gjennomsnitt og median er her mindre enn for formue, men gjennomsnittet ligger likevel over medianen i de fleste kommunene. Det betyr at også inntektsfordelingen er høyreskjev, men mindre ekstrem enn for formue. Ulikheten mellom kommunene er moderat, men noen kommuner har gjennomgående høyere inntektsnivå etter skatt. Skattesystemet bidrar altså til å jevne ut forskjeller, men ikke fullstendig.
+
+```{r}
+ggplot(kommune_stats, aes(x = factor(kommnr))) +
+  geom_col(aes(y = gj_formue), fill = "lightgreen") +
+  geom_point(aes(y = med_formue), color = "darkred", size = 2) +
+  scale_y_continuous(labels = scales::comma) +  # 👈 viser hele tall med komma som tusenskille
+  labs(
+    title = "Formue per kommune (2015)",
+    subtitle = "Grønne søyler = gjennomsnitt, rød prikk = median",
+    x = "Kommune (nummer)",
+    y = "Kroner"
+  ) +
+  theme_minimal()
+```
+
+Formue per kommune (2015)
+
+Denne figuren viser igjen formuefordelingen, men med grønne søyler for å skille den fra de andre økonomiske variablene. Mønsteret er tydelig: i alle kommuner ligger gjennomsnittet langt over medianen. Det viser at formue er svært ulikt fordelt, noen få husholdninger eier en stor andel av totalformuen i kommunen. I mange kommuner er medianen svært lav til tross for at gjennomsnittet er høyt, noe som understreker at ulikheten i formue er mye større enn i inntekt.
+
+Samlet tolkning:
+
+Figurene viser at de økonomiske fordelingene i Troms i 2015 er høyreskjeve: gjennomsnittet er konsekvent høyere enn medianen for alle variabler. Dette innebærer at et lite mindretall med høye verdier trekker gjennomsnittet opp. Ulikheten er størst for formue, noe mindre for inntekt, og minst for inntekt etter skatt – som viser at skattesystemet reduserer, men ikke fjerner, økonomiske forskjeller mellom husholdningene.
+
+## Oppgave 3c
+
+Bruk pakken [ineq](https://cran.r-project.org/web/packages/ineq/ineq.pdf) for å beregne Ginikoeffisienter for inntekt før og etter skatt for de ulike kommunene i Troms. Vis resultatene i en pen figur.
+
+```{r}
+library(ineq)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+```
+
+```{r}
+gini_kommune <- skatt_troms_2015 %>%
+  group_by(kommnr) %>%
+  summarise(
+    gini_inntekt = ineq(inntekt, type = "Gini"),
+    gini_inntekt_etter_skatt = ineq(inntekt_etter_skatt, type = "Gini")
+  ) %>%
+  ungroup()
+```
+
+```{r}
+gini_long <- gini_kommune %>%
+  pivot_longer(cols = c(gini_inntekt, gini_inntekt_etter_skatt),
+               names_to = "type",
+               values_to = "gini") %>%
+  mutate(type = recode(type,
+                       gini_inntekt = "Før skatt",
+                       gini_inntekt_etter_skatt = "Etter skatt"))
+```
+
+```{r}
+ggplot(gini_long, aes(x = factor(kommnr), y = gini, fill = type)) +
+  geom_col(position = "dodge") +
+  scale_fill_manual(values = c("salmon", "blue")) +
+  labs(
+    title = "Ginikoeffisient for inntekt før og etter skatt per kommune (2015)",
+    x = "Kommune (nummer)",
+    y = "Ginikoeffisient",
+    fill = "Type inntekt"
+  ) +
+  theme_minimal()
+```
+
+Jeg har brukt pakken *ineq* til å beregne Ginikoeffisienter for inntekt før og etter skatt for hver kommune i Troms (2015). Figuren viser at Ginikoeffisienten for inntekt etter skatt er lavere enn for inntekt før skatt i alle kommunene. Dette betyr at skattesystemet bidrar til å redusere ulikhet i inntekt. Kommuner med høyere Gini har større økonomiske forskjeller mellom innbyggerne, mens lave verdier indikerer jevnere fordeling.
+
+## Oppgave 3d
+
+## **Tenk at Troms fylkeskommune har som mål å få til en jevn inntektsfordeling blant sine innbyggere. Hvilke tiltak kan fylkeskommunen vurdere for ulike kommuner basert på dine svar til oppgave 3b og 3c?**
+
+Analysen viser at skattesystemet reduserer ulikhet mellom innbyggerne, men at noen kommuner likevel har høyere Gini og dermed større forskjeller. I tillegg tyder funnene på at høy ulikhet kan henge sammen med lavere tillit og høyere kriminalitet. 
+
+For å utjevne forskjellene kan Troms fylkeskommune satse på: 
+
+-   Styrke videregående opplæring og kompetansetiltak i kommuner med høy ulikhet, slik at flere får mulighet til stabile og godt betalte jobber. 
+
+-   Stimulere lokal næringsutvikling, for eksempel gjennom støtteordninger, innovasjonsprosjekter og samarbeid med næringslivet for å skape flere arbeidsplasser. 
+
+-   Sørge for bedre samferdsel og digital infrastruktur, slik at små kommuner får bedre tilgang til arbeidsmarked og tjenester. 
+
+-   Fordele fylkeskommunale midler mer rettferdig, slik at kommuner med svak økonomi får bedre forutsetninger for velferd og trivsel. 
+
+Slike tiltak kan bidra til jevnere inntektsfordeling, økt tillit og mindre sosiale forskjeller i Troms. Tiltak som styrker utdanning, arbeid og fellesskap vil bidra til mindre ulikhet, økt tillit og et mer bærekraftig Troms. 
+
+# KI-erklæring
+
+Du skal også skrive en KI-erklæring. Den skal inneholde:
+
+-   Hvilket KI-verktøy som er brukt
+
+-   Hvilke oppgaver som ble delegert til KI
+
+-   Hvordan du har verifisert innholdet fra KI
+
+-   En ansvarserklæring fra deg som forfatter
+
+**Obligatorisk dokumentasjon**: Dersom du bruker KI-generert tekst ordrett, skal den markeres med anførselstegn. Alt KI-generert innhold må verifiseres og kildehenvises i teksten.
+
+**KI-erklæring**
+
+Jeg har brukt ChatGPT som støtteverktøy for språkvask, feilsøking i R-kode og forslag til struktur og formatering i teksten. Alt faglig innhold, analyser og tolkninger er skrevet av meg selv. Jeg har verifisert all kode og alle tall mot de originale datakildene fra OECD og Our World in Data. Eventuelle feil står jeg fullt ansvarlig for, da jeg bruker KI som et læringsverktøy for å utvikle meg som en fremtidig samfunnsøkonom. I tillegg har jeg benyttet YouTube som supplement for å forstå ulike programmeringsmetoder i R og Quarto.
+
+## **Referanseliste (APA 7)**
+
+Fajnzylber, P., Lederman, D., & Loayza, N. (2002). *Inequality and violent crime.* *Journal of Law and Economics,* 45(1), 1–39. https://doi.org/10.1086/338347
+
+International Monetary Fund (IMF). (2016). *Causes and consequences of income inequality: A global perspective.* IMF Staff Discussion Note SDN/15/13. https://www.imf.org/en/Publications/Staff-Discussion-Notes/Issues/2016/12/31/Causes-and-Consequences-of-Income-Inequality-A-Global-Perspective-42986
+
+Kawachi, I., Kennedy, B. P., Lochner, K., & Prothrow-Stith, D. (1997). *Social capital, income inequality, and mortality.* *American Journal of Public Health,* 87(9), 1491–1498. https://doi.org/10.2105/AJPH.87.9.1491
+
+Rothstein, B., & Uslaner, E. M. (2005). *All for all: Equality, corruption, and social trust.* *World Politics,* 58(1), 41–72. https://doi.org/10.1353/wp.2006.0022
+
+# Bedømmelse
+
+Denne mappeoppgaven teller 40% av karakteren for dette kurset. Oppgavene 1, 2 og 3 teller likt i karaktersettingen. Formålet med oppgaven er å gi dere trening i å
+
+-   skrive godt og tydelig
+
+-   laste ned og anvende data og lage figurer
+
+-   benytte grunnleggende samfunnsøkonomiske begrep og teori
+
+-   være kreativ i å finne og skrive om en samfunnsøkonomisk problemstilling basert på data.
+
+En god besvarelse svarer konkret på oppgavene, gir tydelige definisjoner av faglige begrep, og forklarer utfyllende innholdet i figurene som dere lager. R-koden bør være godt dokumentert og oversiktlig.
